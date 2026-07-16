@@ -1,0 +1,72 @@
+# ============================================================
+#  SECRETS — never commit these
+# ============================================================
+.env
+*.env
+!.env.example
+# Yandex Cloud service-account key(s)
+authorized_key.json
+**/authorized_key.json
+# Real collector connection list (has DB hosts/passwords).
+# Use collectors.example.json as a template.
+collectors.json
+
+# ============================================================
+#  Python
+# ============================================================
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments (the bundled Windows collector venv, etc.)
+winlog/
+venv/
+.venv/
+env/
+ENV/
+
+# ============================================================
+#  Node / frontend build artifacts
+# ============================================================
+node_modules/
+frontend-react/node_modules/
+frontend-react/dist/
+*.local
+
+# ============================================================
+#  Logs & runtime data
+# ============================================================
+logs/
+*.log
+
+# Windows event-log import artifacts
+*.evtx
+
+# ============================================================
+#  Archives / backups
+# ============================================================
+*.rar
+*.zip
+*.7z
+*.tar
+*.tar.gz
+
+# ============================================================
+#  IDE / OS
+# ============================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================================
+#  Local tooling
+# ============================================================
+.claude/

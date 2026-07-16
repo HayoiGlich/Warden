@@ -1,0 +1,9 @@
+{
+  "_comment": "Yandex Cloud service-account authorized key. Create one with: yc iam key create --service-account-name <sa> --output authorized_key.json. Put the real file next to this one as authorized_key.json (git-ignored).",
+  "id": "aje00000000000000000",
+  "service_account_id": "aje11111111111111111",
+  "created_at": "2025-01-01T00:00:00Z",
+  "key_algorithm": "RSA_2048",
+  "public_key": "-----BEGIN PUBLIC KEY-----\n...replace...\n-----END PUBLIC KEY-----\n",
+  "private_key": "-----BEGIN PRIVATE KEY-----\n...replace...\n-----END PRIVATE KEY-----\n"
+}

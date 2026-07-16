@@ -1,0 +1,52 @@
+# Веб-«управлялка» (Winlog-поиск + AD-админка). Запускается в Docker на Linux.
+# Коллекторы событий остаются НАТИВНЫМИ на Windows-серверах и сюда не входят.
+# Базы коллекторов читаются по сети (read-only). Отдельный Postgres `db` ниже —
+# это СВОЯ база приложения: авторизация (учётки) и настройки.
+services:
+  web:
+    build: .
+    image: winlog-web:latest
+    container_name: winlog-web
+    env_file:
+      - .env
+    environment:
+      # App-БД приложения (auth/настройки) — сервис db ниже
+      APP_DB_HOST: db
+      APP_DB_PORT: "5432"
+      APP_DB_NAME: appdb
+      APP_DB_USER: app
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-app}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./collectors.json:/app/collectors.json:ro
+      # Ключ сервисного аккаунта YC + шаблон отчёта (секрет не зашиваем в образ).
+      - ./yandex_mig:/app/yandex_mig:ro
+    restart: unless-stopped
+    # Всё работает по IP: AD_SERVER=IP в .env, хосты коллекторов = IP в
+    # collectors.json. Поэтому доменный DNS и extra_hosts НЕ нужны.
+    # Если когда-нибудь понадобится резолвить ИМЯ — добавь сюда:
+    #   extra_hosts:
+    #     - "hostname:IP"
+
+  db:
+    image: postgres:16-alpine
+    container_name: winlog-appdb
+    environment:
+      POSTGRES_DB: appdb
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:-app}
+    volumes:
+      - appdb-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d appdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  appdb-data:

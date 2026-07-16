@@ -1,0 +1,28 @@
+# Python venv коллектора (огромный, не нужен в образе)
+winlog/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Node
+frontend-react/node_modules/
+frontend-react/dist/
+node_modules/
+
+# Старый статический фронт (используется собранный React dist)
+frontend/
+
+# Секреты и логи — не зашиваем в образ (.env подаётся через env_file)
+.env
+*.log
+logs/
+
+# Артефакты EVTX/импортёра
+*.evtx
+
+# Прочее
+.git/
+.gitignore
+.claude/
+**/*.md
+collectors.json

@@ -1,0 +1,628 @@
+/* =====================================================================
+   Friendly layer — подсказки, приветствия и тёплая полировка UI.
+   Подключается последним, поэтому может аккуратно перекрывать базу.
+   ===================================================================== */
+
+:root {
+  --hint-bg: #0f172a;
+  --hint-fg: #f8fafc;
+  --tip-radius: 16px;
+}
+
+/* ---------- Help hint («?» рядом с подписью) ---------- */
+
+.field-label-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.field-req {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.help-hint {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: help;
+  vertical-align: middle;
+  border-radius: 50%;
+  transition: color 140ms ease, background 140ms ease;
+}
+.help-hint:hover,
+.help-hint:focus-visible {
+  color: var(--primary);
+  background: var(--primary-soft);
+  outline: none;
+}
+.help-hint i {
+  font-size: 0.92rem;
+  line-height: 1;
+}
+
+.help-hint-bubble,
+.tooltip-bubble {
+  position: absolute;
+  z-index: 80;
+  left: 50%;
+  bottom: calc(100% + 9px);
+  transform: translateX(-50%) translateY(4px);
+  width: max-content;
+  max-width: 260px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: var(--hint-bg);
+  color: var(--hint-fg);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 12px 28px -8px rgba(15, 23, 42, 0.5);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+.help-hint-bubble::after,
+.tooltip-bubble::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--hint-bg);
+}
+
+.help-hint:hover .help-hint-bubble,
+.help-hint:focus .help-hint-bubble,
+.help-hint:focus-visible .help-hint-bubble,
+.tooltip-host:hover .tooltip-bubble,
+.tooltip-host:focus-within .tooltip-bubble {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Вариант «снизу» — когда подсказка у верхней кромки экрана. */
+.help-hint-bottom .help-hint-bubble,
+.tooltip-bottom .tooltip-bubble {
+  bottom: auto;
+  top: calc(100% + 9px);
+  transform: translateX(-50%) translateY(-4px);
+}
+.help-hint-bottom .help-hint-bubble::after,
+.tooltip-bottom .tooltip-bubble::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: var(--hint-bg);
+}
+.help-hint-bottom:hover .help-hint-bubble,
+.help-hint-bottom:focus .help-hint-bubble,
+.tooltip-bottom:hover .tooltip-bubble,
+.tooltip-bottom:focus-within .tooltip-bubble {
+  transform: translateX(-50%) translateY(0);
+}
+
+.tooltip-host {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Подсказки в левой колонке форм (Avanpost-стиль): «?» у левого края —
+   центрированный пузырь вылезает за экран, а вверх наезжает на шапку секции
+   и режется. Поэтому привязываем к левому краю значка и раскрываем ВНИЗ-вправо. */
+.av-label .help-hint-bubble {
+  left: 0;
+  bottom: auto;
+  top: calc(100% + 9px);
+  transform: translateX(0) translateY(-4px);
+}
+.av-label .help-hint:hover .help-hint-bubble,
+.av-label .help-hint:focus .help-hint-bubble,
+.av-label .help-hint:focus-visible .help-hint-bubble {
+  transform: translateX(0) translateY(0);
+}
+.av-label .help-hint-bubble::after {
+  top: auto;
+  bottom: 100%;
+  left: 8px;
+  transform: none;
+  border-top-color: transparent;
+  border-bottom-color: var(--hint-bg);
+}
+
+/* ---------- Tip card (дружелюбная подсказка-плашка) ---------- */
+
+.tip-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  border-radius: var(--tip-radius);
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(135deg, var(--tip-tint, rgba(79, 70, 229, 0.08)), transparent 70%),
+    var(--surface);
+  box-shadow: var(--shadow-xs);
+  animation: tip-in 240ms ease;
+}
+@keyframes tip-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tip-card.is-primary { --tip-tint: rgba(79, 70, 229, 0.10); border-color: rgba(79, 70, 229, 0.20); }
+.tip-card.is-info    { --tip-tint: rgba(14, 165, 233, 0.12); border-color: rgba(14, 165, 233, 0.22); }
+.tip-card.is-success { --tip-tint: rgba(5, 150, 105, 0.12); border-color: rgba(5, 150, 105, 0.22); }
+.tip-card.is-warning { --tip-tint: rgba(217, 119, 6, 0.14); border-color: rgba(217, 119, 6, 0.24); }
+
+.tip-card-icon {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  box-shadow: 0 8px 18px -8px rgba(79, 70, 229, 0.6);
+}
+.tip-card.is-info .tip-card-icon    { background: linear-gradient(135deg, #0ea5e9, #0284c7); box-shadow: 0 8px 18px -8px rgba(14,165,233,0.6); }
+.tip-card.is-success .tip-card-icon { background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 8px 18px -8px rgba(5,150,105,0.6); }
+.tip-card.is-warning .tip-card-icon { background: linear-gradient(135deg, #f59e0b, #d97706); box-shadow: 0 8px 18px -8px rgba(217,119,6,0.6); }
+
+.tip-card-body { flex: 1; min-width: 0; padding-top: 1px; }
+.tip-card-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+.tip-card-text {
+  color: var(--muted-strong);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+.tip-card-text kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  background: var(--surface-muted);
+  color: var(--text);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.tip-card-text b { color: var(--text); }
+
+.tip-card-close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 140ms ease, color 140ms ease;
+}
+.tip-card-close:hover { background: var(--surface-muted); color: var(--text); }
+
+/* ---------- Keyboard hint chips ---------- */
+
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  background: var(--surface-muted);
+  color: var(--muted-strong);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+/* ---------- Empty-state call-to-action ---------- */
+
+.empty-state-cta {
+  margin-top: 6px;
+}
+
+/* ---------- Home: friendly welcome ---------- */
+
+.home-welcome {
+  position: relative;
+  overflow: hidden;
+  padding: 30px 32px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--line);
+  background:
+    radial-gradient(700px 280px at 100% 0%, rgba(37, 99, 235, 0.08), transparent 60%),
+    var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-xs);
+  margin-bottom: 24px;
+}
+.home-welcome-kicker {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  border: 1px solid transparent;
+  color: var(--primary-strong);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.home-welcome-title {
+  position: relative;
+  margin: 16px 0 0;
+  font-size: clamp(1.7rem, 3vw, 2.5rem);
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  color: var(--text);
+}
+.home-welcome-title .wave {
+  display: inline-block;
+  transform-origin: 70% 70%;
+  animation: wave 2.4s ease-in-out 1s 2;
+}
+@keyframes wave {
+  0%, 60%, 100% { transform: rotate(0deg); }
+  10%, 30% { transform: rotate(16deg); }
+  20% { transform: rotate(-8deg); }
+  40% { transform: rotate(10deg); }
+}
+.home-welcome-sub {
+  position: relative;
+  margin: 12px 0 0;
+  max-width: 62ch;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+/* ---------- Quick tips grid (как начать) ---------- */
+
+.quick-tips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+  margin-bottom: 26px;
+}
+.quick-tip {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 16px 18px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+}
+.quick-tip:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--line-strong);
+}
+.quick-tip-num {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: var(--primary-strong);
+  background: var(--primary-soft);
+}
+.quick-tip-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.quick-tip-text {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+/* ---------- Login — тёплый и понятный ---------- */
+
+.auth-screen {
+  background:
+    radial-gradient(900px 500px at 10% -10%, rgba(37, 99, 235, 0.10), transparent 60%),
+    radial-gradient(800px 460px at 110% 10%, rgba(14, 165, 233, 0.10), transparent 55%),
+    var(--bg);
+}
+
+.auth-card {
+  max-width: 430px;
+  border-radius: var(--radius-xl);
+  border-color: var(--line);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  padding: 0;
+}
+
+.auth-hero {
+  padding: 26px 28px 20px;
+  color: #fff;
+  background:
+    radial-gradient(620px 260px at 100% 0%, rgba(37, 99, 235, 0.45), transparent 65%),
+    linear-gradient(135deg, #0d1526, #1a2742);
+}
+.auth-hero .auth-brand { margin-bottom: 14px; }
+.auth-hero .auth-brand-mark {
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  border: none;
+  color: #fff;
+  font-weight: 800;
+}
+.auth-hero .auth-brand-name { color: #fff; }
+.auth-hero .auth-brand-sub { color: rgba(255,255,255,0.72); opacity: 1; }
+.auth-hero-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+.auth-hero-sub {
+  margin-top: 6px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: rgba(255,255,255,0.82);
+}
+
+.auth-body { padding: 24px 28px 28px; }
+
+.auth-form { gap: 16px; }
+
+.auth-field input {
+  min-height: 46px;
+  border-radius: var(--radius-sm);
+  border-color: var(--line-strong);
+  background: var(--surface);
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+.auth-field input:focus {
+  box-shadow: 0 0 0 4px var(--primary-ring);
+}
+
+/* Поле пароля с кнопкой показать/скрыть */
+.pw-field { position: relative; }
+.pw-field input { padding-right: 44px; width: 100%; }
+.pw-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: color 140ms ease, background 140ms ease;
+}
+.pw-toggle:hover { color: var(--primary); background: var(--surface-muted); }
+
+.auth-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--muted-strong);
+  line-height: 1.5;
+}
+.auth-hint i { color: var(--info); margin-top: 1px; }
+
+.auth-demo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px dashed var(--line-strong);
+  background: var(--surface-muted);
+  font-size: 0.82rem;
+  color: var(--muted-strong);
+}
+.auth-demo code {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-weight: 600;
+}
+.auth-demo i { color: var(--warning); }
+
+.auth-submit {
+  min-height: 46px;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  box-shadow: 0 8px 18px -8px rgba(37, 99, 235, 0.6);
+  transition: filter 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+}
+.auth-submit:hover:not(:disabled) { filter: brightness(1.05); transform: translateY(-1px); }
+.auth-submit:active:not(:disabled) { transform: translateY(0); }
+
+/* Разделитель «или» + кнопка SSO (вход через Avanpost 2FA) */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.auth-sso {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong, #d5dae3);
+  background: var(--surface, #fff);
+  color: var(--text, #1f2733);
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+.auth-sso:hover {
+  border-color: var(--primary, #2563eb);
+  background: var(--primary-soft, rgba(37, 99, 235, 0.08));
+  transform: translateY(-1px);
+}
+
+/* Индикатор надёжности пароля */
+.pw-meter { display: flex; flex-direction: column; gap: 6px; }
+.pw-meter-track {
+  display: flex;
+  gap: 4px;
+}
+.pw-meter-seg {
+  height: 5px;
+  flex: 1;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background 200ms ease;
+}
+.pw-meter.is-1 .pw-meter-seg:nth-child(-n+1),
+.pw-meter.is-2 .pw-meter-seg:nth-child(-n+2),
+.pw-meter.is-3 .pw-meter-seg:nth-child(-n+3),
+.pw-meter.is-4 .pw-meter-seg:nth-child(-n+4) { background: var(--meter-color, var(--primary)); }
+.pw-meter.is-1 { --meter-color: #e11d48; }
+.pw-meter.is-2 { --meter-color: #d97706; }
+.pw-meter.is-3 { --meter-color: #0ea5e9; }
+.pw-meter.is-4 { --meter-color: #059669; }
+.pw-meter-label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.auth-step-dots {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.auth-step-dot {
+  height: 4px;
+  width: 26px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.3);
+}
+.auth-step-dot.is-active { background: #fff; }
+
+/* ---------- Friendly micro-polish ---------- */
+
+/* Иконочные кнопки с подсказкой не должны обрезаться в тулбарах */
+.search-toolbar-actions .tooltip-host { display: inline-flex; }
+
+/* Плавное появление секций-поверхностей */
+.surface { transition: box-shadow 200ms ease, border-color 200ms ease; }
+
+/* Более «живой» hover у вторичных кнопок */
+.btn-outline-secondary:hover { transform: translateY(-1px); }
+
+/* Уважение к пользователям с reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .home-welcome-title .wave { animation: none; }
+  .tip-card,
+  .quick-tip,
+  .btn,
+  .btn-outline-secondary:hover,
+  .auth-submit:hover:not(:disabled) { animation: none; transition: none; transform: none; }
+}
+
+/* =====================================================================
+   Modern compact — плотность и тишина: меньше текста, меньше «воздуха»,
+   спокойнее заголовки. Контент на первом месте.
+   ===================================================================== */
+
+.app-main { padding: 22px 0 48px; }
+
+.page-hero {
+  padding: 18px 22px;
+  margin-bottom: 16px;
+}
+.page-hero-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  font-size: 1.15rem;
+}
+.page-hero-title { font-size: clamp(1.3rem, 1.9vw, 1.6rem); margin-top: 3px; }
+.page-hero-subtitle { font-size: 0.86rem; margin-top: 4px; }
+.page-hero-chips { margin-top: 10px; }
+.page-hero-eyebrow { font-size: 0.68rem; }
+
+.stat-grid { gap: 12px; margin-bottom: 16px; }
+.stat-tile { padding: 14px 18px; }
+.stat-tile-value { font-size: 1.5rem; margin-top: 5px; }
+.stat-tile-note { font-size: 0.78rem; margin-top: 3px; }
+
+.section-title { font-size: 1.12rem; }
+.section-note { font-size: 0.84rem; margin-top: 4px; }
+.eyebrow { font-size: 0.66rem; }
+
+.surface-pad { padding: 20px 22px; }
+
+.home-welcome { padding: 24px 26px; margin-bottom: 18px; }
+.home-welcome-sub { font-size: 0.94rem; margin-top: 8px; }
+.quick-tips { margin-bottom: 18px; }
+.quick-tip { padding: 14px 16px; }
+.home-service { padding: 20px; gap: 12px; }
+
+.settings-tabs { margin-bottom: 14px; }
+
+.empty-state { padding: 44px 24px; }
+
+.admin-hint { font-size: 0.8rem; }
+
+@media (max-width: 600px) {
+  .page-hero { padding: 16px 16px; }
+  .home-welcome { padding: 20px 18px; }
+}
