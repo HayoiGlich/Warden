@@ -1058,10 +1058,11 @@ export default function SettingsPage() {
 
                       <Row
                         label="Фильтр поиска групп"
-                        hint="LDAP-фрагмент к поиску групп. Пусто — без ограничений."
+                        hint="Ограничивает, какие группы видны при выборе групп AD (и в поиске по ним). Обычно оставляйте ПУСТЫМ — тогда доступны все группы домена. Не вставляйте сюда фильтр 2FA из Avanpost: он перечисляет только 2fa-группы и скроет все остальные."
                       >
                         <input
                           className="av-input"
+                          placeholder="пусто — все группы домена"
                           value={selected.group_filter}
                           onChange={(e) =>
                             setProv(selected._id, "group_filter", e.target.value)

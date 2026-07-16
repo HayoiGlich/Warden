@@ -85,7 +85,7 @@ class Settings(BaseSettings):
     oidc_userinfo_url: str = Field("", alias="OIDC_USERINFO_URL")
     oidc_end_session_url: str = Field("", alias="OIDC_END_SESSION_URL")
     oidc_redirect_uri: str = Field("", alias="OIDC_REDIRECT_URI")
-    oidc_scope: str = Field("openid profile email employee", alias="OIDC_SCOPE")
+    oidc_scope: str = Field("openid profile email", alias="OIDC_SCOPE")
     # Клейм, соответствующий логину AD (sAMAccountName). Обычно
     # preferred_username; иногда sub/email.
     oidc_username_claim: str = Field("preferred_username", alias="OIDC_USERNAME_CLAIM")

@@ -615,6 +615,10 @@ function GroupPicker({ value, onChange }) {
         multi
         searchPlaceholder="Поиск группы по имени…"
         confirmLabel="Применить выбор"
+        searchFn={async (q) => {
+          const data = await getAdGroupsList(q, 200);
+          return Array.isArray(data?.groups) ? data.groups : [];
+        }}
         onClose={() => setModalOpen(false)}
         onConfirm={applyModal}
       />
@@ -1899,6 +1903,14 @@ function BulkPanel({ ous, pushToast, setLoading }) {
         multi={picker.type === "groups"}
         searchPlaceholder="Поиск по имени или DN…"
         confirmLabel={picker.type === "ou" ? "Выбрать OU" : "Применить выбор"}
+        searchFn={
+          picker.type === "groups"
+            ? async (q) => {
+                const data = await getAdGroupsList(q, 200);
+                return Array.isArray(data?.groups) ? data.groups : [];
+              }
+            : null
+        }
         onClose={closePicker}
         onConfirm={confirmPicker}
       />

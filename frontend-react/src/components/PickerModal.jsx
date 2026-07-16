@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * Универсальное модальное окно выбора из списка с галочками и поиском.
@@ -27,19 +27,54 @@ export default function PickerModal({
   multi = true,
   searchPlaceholder = "Поиск по названию…",
   confirmLabel = "Применить",
+  searchFn = null,
   onClose,
   onConfirm,
 }) {
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState(() => new Set());
+  // Найденное живым поиском на сервере (список из props может быть неполным).
+  const [extraItems, setExtraItems] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const timerRef = useRef(null);
+  // Держим searchFn в ref: родитель может передавать инлайн-стрелку, и она не
+  // должна попадать в зависимости эффекта (иначе перезапуск на каждый рендер).
+  const searchFnRef = useRef(searchFn);
+  searchFnRef.current = searchFn;
 
   useEffect(() => {
     if (open) {
       setSelected(new Set(selectedKeys || []));
       setFilter("");
+      setExtraItems([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Живой поиск на сервере с дебаунсом: подмешиваем совпадения, которых нет в
+  // предзагруженном списке (например, группа за пределами первой выборки).
+  useEffect(() => {
+    if (!open || !searchFnRef.current) return undefined;
+    const q = filter.trim();
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    if (q.length < 2) {
+      setExtraItems([]);
+      setSearching(false);
+      return undefined;
+    }
+    timerRef.current = window.setTimeout(async () => {
+      setSearching(true);
+      try {
+        const found = await searchFnRef.current(q);
+        setExtraItems(Array.isArray(found) ? found : []);
+      } catch {
+        setExtraItems([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 250);
+    return () => timerRef.current && window.clearTimeout(timerRef.current);
+  }, [filter, open]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -50,15 +85,30 @@ export default function PickerModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  // Предзагруженные + найденные на сервере, без дублей по ключу.
+  const allItems = useMemo(() => {
+    if (!extraItems.length) return items;
+    const seen = new Set(items.map((it) => keyOf(it)));
+    const merged = [...items];
+    extraItems.forEach((it) => {
+      const key = keyOf(it);
+      if (!seen.has(key)) {
+        seen.add(key);
+        merged.push(it);
+      }
+    });
+    return merged;
+  }, [items, extraItems, keyOf]);
+
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((it) => {
+    if (!q) return allItems;
+    return allItems.filter((it) => {
       const label = String(labelOf(it) || "").toLowerCase();
       const sub = String((subOf && subOf(it)) || "").toLowerCase();
       return label.includes(q) || sub.includes(q);
     });
-  }, [items, filter, labelOf, subOf]);
+  }, [allItems, filter, labelOf, subOf]);
 
   const MAX_RENDER = 5000;
   const visible = filtered.slice(0, MAX_RENDER);
@@ -93,7 +143,9 @@ export default function PickerModal({
   }
 
   function confirm() {
-    const chosen = items.filter((it) => selected.has(keyOf(it)));
+    // Именно по allItems: выбранное могло прийти из живого поиска и
+    // отсутствовать в предзагруженном списке.
+    const chosen = allItems.filter((it) => selected.has(keyOf(it)));
     onConfirm?.(chosen, selected);
   }
 
@@ -112,7 +164,7 @@ export default function PickerModal({
             <div className="modal-sub">
               {loading
                 ? "Загружаю список…"
-                : subtitle || `Доступно: ${items.length} · выбрано: ${selected.size}`}
+                : subtitle || `Доступно: ${allItems.length} · выбрано: ${selected.size}`}
             </div>
           </div>
           <button type="button" className="modal-close" aria-label="Закрыть" onClick={onClose}>
@@ -152,7 +204,9 @@ export default function PickerModal({
                 Загрузка…
               </div>
             ) : filtered.length === 0 ? (
-              <div className="result-muted" style={{ padding: 16 }}>Ничего не найдено</div>
+              <div className="result-muted" style={{ padding: 16 }}>
+                {searching ? "Ищу…" : "Ничего не найдено"}
+              </div>
             ) : (
               <>
                 {visible.map((it) => {

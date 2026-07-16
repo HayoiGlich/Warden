@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 import yaml
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -19,7 +19,7 @@ load_dotenv()
 from backend.api.routes import router as api_router
 from backend.api.ad_admin_router import ad_admin_router
 from backend.api.auth_router import auth_router
-from backend.api.oidc_router import oidc_router
+from backend.api.oidc_router import oidc_router, oidc_callback
 from backend.api.templates_router import templates_router
 from backend.api.settings_router import settings_router
 from backend.api.yc_router import yc_router
@@ -182,6 +182,17 @@ async def page_winlog():
     if react_frontend_ready():
         return file_or_404(react_frontend_dir() / "index.html")
     return file_or_404(frontend_dir() / "winlog" / "index.html")
+
+
+@app.get("/callback", include_in_schema=False)
+async def page_oidc_callback_alias(request: Request):
+    """Короткий алиас OIDC-callback.
+
+    Канонический путь — /api/auth/oidc/callback, но в IdP redirect_uri часто
+    регистрируют как <host>/callback. Без этого алиаса такой путь попадал бы в
+    SPA-fallback (отдавался index.html), и код авторизации терялся.
+    """
+    return await oidc_callback(request)
 
 
 @app.get("/{full_path:path}")

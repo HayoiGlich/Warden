@@ -906,7 +906,12 @@ class ADConnector:
 
     def list_groups(self, query: str = "", limit: int = 5000) -> List[Dict[str, str]]:
         q = (query or "").strip()
-        gf = self.group_filter or ""
+        # Фильтр из настроек — дополнительный фрагмент, который И-ится с
+        # (objectClass=group). Если скобки забыли — добавим: иначе LDAP-фильтр
+        # получится невалидным и список групп молча окажется пустым.
+        gf = (self.group_filter or "").strip()
+        if gf and not gf.startswith("("):
+            gf = f"({gf})"
         if q:
             safe = escape_filter_chars(q)
             flt = (
