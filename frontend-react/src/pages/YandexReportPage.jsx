@@ -341,6 +341,7 @@ export default function YandexReportPage() {
     try {
       const rows = selectedVms.map((v) => ({
         name: v.name,
+        created_at: v.created_at,
         platform: v.platform,
         cpu_type: v.cpu_type,
         cores: v.cores,
@@ -442,6 +443,7 @@ export default function YandexReportPage() {
                       />
                     </th>
                     <th>Имя ВМ</th>
+                    <th>Создана</th>
                     <th>Статус</th>
                     <th>Платформа</th>
                     <th>Тип ЦПУ</th>
@@ -458,7 +460,7 @@ export default function YandexReportPage() {
                 <tbody>
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={12} className="admin-hint" style={{ textAlign: "center" }}>
+                      <td colSpan={13} className="admin-hint" style={{ textAlign: "center" }}>
                         {vms.length ? "Ничего не найдено." : "В фолдере нет виртуальных машин."}
                       </td>
                     </tr>
@@ -477,6 +479,7 @@ export default function YandexReportPage() {
                             <input type="checkbox" checked={checked} onChange={() => toggle(v.id)} />
                           </td>
                           <td>{v.name}</td>
+                          <td className="yc-nowrap">{v.created_at || "—"}</td>
                           <td>
                             <span className={`yc-status yc-${tone}`}>{v.status}</span>
                           </td>
@@ -530,6 +533,7 @@ export default function YandexReportPage() {
                   <thead>
                     <tr>
                       <th>Имя ВМ</th>
+                      <th>Дата создания</th>
                       <th>Платформа</th>
                       <th>Тип ЦПУ</th>
                       <th className="yc-num">ЦПУ, шт.</th>
@@ -545,6 +549,7 @@ export default function YandexReportPage() {
                     {selectedVms.map((v) => (
                       <tr key={v.id}>
                         <td>{v.name}</td>
+                        <td className="yc-nowrap">{v.created_at || "—"}</td>
                         <td>{v.platform}</td>
                         <td>{v.cpu_type}</td>
                         <td className="yc-num">{fmtNum(v.cores)}</td>
@@ -559,7 +564,7 @@ export default function YandexReportPage() {
                   </tbody>
                   <tfoot>
                     <tr className="yc-total-row">
-                      <td colSpan={3}>ИТОГО</td>
+                      <td colSpan={4}>ИТОГО</td>
                       <td className="yc-num">{fmtNum(totals.cores)}</td>
                       <td className="yc-num">{fmtNum(totals.ram)}</td>
                       <td className="yc-num">{fmtNum(totals.ssd)}</td>

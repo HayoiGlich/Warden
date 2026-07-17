@@ -277,6 +277,7 @@ class YcReportRow(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     name: str = ""
+    created_at: str = ""
     platform: str = ""
     cpu_type: str = ""
     cores: float = 0

@@ -15,6 +15,7 @@ from __future__ import annotations
 import io
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -173,6 +174,14 @@ def _round2(value: float) -> float:
     return round(float(value or 0), 2)
 
 
+def _fmt_created(ts) -> str:
+    """protobuf Timestamp -> ДД.ММ.ГГГГ. Пусто, если даты нет."""
+    seconds = int(getattr(ts, "seconds", 0) or 0)
+    if not seconds:
+        return ""
+    return datetime.fromtimestamp(seconds, tz=timezone.utc).strftime("%d.%m.%Y")
+
+
 def list_vms() -> List[Dict[str, Any]]:
     """Перечень ВМ фолдера: ресурсы, размеры дисков/снапшотов и расчётная цена."""
     sdk = _init_sdk()
@@ -306,6 +315,7 @@ def list_vms() -> List[Dict[str, Any]]:
                 {
                     "id": inst.id,
                     "name": inst.name,
+                    "created_at": _fmt_created(getattr(inst, "created_at", None)),
                     "zone_id": inst.zone_id,
                     "status": _fmt_status(Instance, inst.status),
                     "platform": PLATFORM_NAMES.get(inst.platform_id, inst.platform_id or ""),
@@ -442,13 +452,14 @@ def build_report_xlsx(rows: List[Dict[str, Any]]) -> bytes:
     header_fill = PatternFill("solid", fgColor="E2EFDA")
 
     list_headers = [
-        "Имя ВМ", "Платформа", "Тип ЦПУ", "ЦПУ, шт.", "ОЗУ, Гб", "SSD, Гб", "HDD, Гб",
+        "Имя ВМ", "Дата создания", "Платформа", "Тип ЦПУ", "ЦПУ, шт.", "ОЗУ, Гб",
+        "SSD, Гб", "HDD, Гб",
     ]
     snap_headers = ["Имя ВМ", "Снимки, Гб"]
     total_headers = [
-        "Имя ВМ", "Платформа", "Тип ЦПУ", "ЦПУ, шт.", "ОЗУ, Гб", "SSD, Гб", "HDD, Гб",
-        "Снимки, Гб", "Итого за ВМ в день, ₽", "Итого за ВМ в год, ₽",
-        "Итого за всё в год, ₽",
+        "Имя ВМ", "Дата создания", "Платформа", "Тип ЦПУ", "ЦПУ, шт.", "ОЗУ, Гб",
+        "SSD, Гб", "HDD, Гб", "Снимки, Гб", "Итого за ВМ в день, ₽",
+        "Итого за ВМ в год, ₽", "Итого за всё в год, ₽",
     ]
 
     def reset(ws, headers):
@@ -465,6 +476,7 @@ def build_report_xlsx(rows: List[Dict[str, Any]]) -> bytes:
 
     for idx, row in enumerate(rows, start=2):
         name = str(row.get("name") or "")
+        created_at = str(row.get("created_at") or "")
         platform = str(row.get("platform") or "")
         cpu_type = str(row.get("cpu_type") or "Обычный")
         cores = row.get("cores") or 0
@@ -474,12 +486,13 @@ def build_report_xlsx(rows: List[Dict[str, Any]]) -> bytes:
         snap_gb = row.get("snapshots_gb") or 0
 
         ws_list.cell(idx, 1, name)
-        ws_list.cell(idx, 2, platform)
-        ws_list.cell(idx, 3, cpu_type)
-        ws_list.cell(idx, 4, cores)
-        ws_list.cell(idx, 5, ram_gb)
-        ws_list.cell(idx, 6, ssd_gb)
-        ws_list.cell(idx, 7, hdd_gb)
+        ws_list.cell(idx, 2, created_at)
+        ws_list.cell(idx, 3, platform)
+        ws_list.cell(idx, 4, cpu_type)
+        ws_list.cell(idx, 5, cores)
+        ws_list.cell(idx, 6, ram_gb)
+        ws_list.cell(idx, 7, ssd_gb)
+        ws_list.cell(idx, 8, hdd_gb)
 
         ws_snap.cell(idx, 1, name)
         ws_snap.cell(idx, 2, snap_gb)
@@ -490,25 +503,21 @@ def build_report_xlsx(rows: List[Dict[str, Any]]) -> bytes:
         cpu_cell = "$D$3" if is_hi else "$B$3"
         ram_cell = "$F$3" if is_hi else "$E$3"
 
-        ws_total.cell(idx, 1, f"='Список ВМ'!A{idx}")
-        ws_total.cell(idx, 2, f"='Список ВМ'!B{idx}")
-        ws_total.cell(idx, 3, f"='Список ВМ'!C{idx}")
-        ws_total.cell(idx, 4, f"='Список ВМ'!D{idx}")
-        ws_total.cell(idx, 5, f"='Список ВМ'!E{idx}")
-        ws_total.cell(idx, 6, f"='Список ВМ'!F{idx}")
-        ws_total.cell(idx, 7, f"='Список ВМ'!G{idx}")
-        ws_total.cell(idx, 8, f"='Снимки'!B{idx}")
+        # A..H — зеркало «Список ВМ», I — снимки, J/K/L — расчёт.
+        for col, letter in enumerate("ABCDEFGH", start=1):
+            ws_total.cell(idx, col, f"='Список ВМ'!{letter}{idx}")
+        ws_total.cell(idx, 9, f"='Снимки'!B{idx}")
         ws_total.cell(
             idx,
-            9,
-            f"=D{idx}*Тариф!{cpu_cell}+E{idx}*Тариф!{ram_cell}"
-            f"+F{idx}*Тариф!$G$3+G{idx}*Тариф!$I$3",
+            10,
+            f"=E{idx}*Тариф!{cpu_cell}+F{idx}*Тариф!{ram_cell}"
+            f"+G{idx}*Тариф!$G$3+H{idx}*Тариф!$I$3",
         )
-        ws_total.cell(idx, 10, f"=I{idx}*365")
+        ws_total.cell(idx, 11, f"=J{idx}*365")
 
     if rows:
         last = len(rows) + 1
-        ws_total.cell(2, 11, f"=SUM(J2:J{last})")
+        ws_total.cell(2, 12, f"=SUM(K2:K{last})")
 
     # Ширина колонок для читабельности + закреплённая шапка.
     for ws, headers in (
