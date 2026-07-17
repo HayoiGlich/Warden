@@ -115,16 +115,38 @@ function useToasts() {
 /* -------------------------------------------------------- tariff editor */
 
 // Поля тарифа (цена за час, ₽). Ключи совпадают с backend.
-const TARIFF_FIELDS = [
-  { key: "cpu_100", label: "ЦПУ обычный, 100%" },
-  { key: "cpu_50", label: "ЦПУ обычный, 50%" },
-  { key: "cpu_hi", label: "ЦПУ Compute Optimized" },
-  { key: "ram", label: "ОЗУ обычное" },
-  { key: "ram_hi", label: "ОЗУ Compute Optimized" },
-  { key: "ssd", label: "SSD" },
-  { key: "ssd_io", label: "SSD IO" },
-  { key: "hdd", label: "HDD" },
+// Тарифы сгруппированы: ЦПУ/ОЗУ отдельно для Intel и AMD, диски — общие.
+const TARIFF_GROUPS = [
+  {
+    title: "Intel — ЦПУ и ОЗУ",
+    fields: [
+      { key: "intel_cpu_100", label: "ЦПУ обычный, 100%" },
+      { key: "intel_cpu_50", label: "ЦПУ обычный, 50%" },
+      { key: "intel_cpu_hi", label: "ЦПУ Compute Optimized" },
+      { key: "intel_ram", label: "ОЗУ обычное" },
+      { key: "intel_ram_hi", label: "ОЗУ Compute Optimized" },
+    ],
+  },
+  {
+    title: "AMD — ЦПУ и ОЗУ",
+    fields: [
+      { key: "amd_cpu_100", label: "ЦПУ обычный, 100%" },
+      { key: "amd_cpu_50", label: "ЦПУ обычный, 50%" },
+      { key: "amd_cpu_hi", label: "ЦПУ Compute Optimized" },
+      { key: "amd_ram", label: "ОЗУ обычное" },
+      { key: "amd_ram_hi", label: "ОЗУ Compute Optimized" },
+    ],
+  },
+  {
+    title: "Диски (общие для Intel и AMD)",
+    fields: [
+      { key: "ssd", label: "SSD" },
+      { key: "ssd_io", label: "SSD IO" },
+      { key: "hdd", label: "HDD" },
+    ],
+  },
 ];
+const TARIFF_FIELDS = TARIFF_GROUPS.flatMap((g) => g.fields);
 
 function TariffEditor({ pushToast, onSaved }) {
   const [open, setOpen] = useState(false);
@@ -231,26 +253,33 @@ function TariffEditor({ pushToast, onSaved }) {
         ) : (
           <>
             <div className="admin-hint" style={{ margin: "10px 0 4px" }}>
-              Цены за час. В отчёте переводятся в сутки (×24) и год. Стоимость ВМ =
-              ЦПУ + ОЗУ (по типу платформы) + SSD + HDD.
+              Цены за час. Стоимость ВМ считается по вендору (Intel или AMD) и типу
+              платформы: ЦПУ + ОЗУ + SSD + HDD. Диски общие для обоих вендоров.
             </div>
-            <div className="admin-grid">
-              {TARIFF_FIELDS.map((f) => (
-                <div className="field-stack" key={f.key}>
-                  <label className="field-label">{f.label}</label>
-                  <div className="field-control-wrap">
-                    <i className="bi bi-currency-exchange field-icon" aria-hidden="true" />
-                    <input
-                      className="form-control"
-                      inputMode="decimal"
-                      value={values[f.key]}
-                      placeholder="0"
-                      onChange={(e) => setField(f.key, e.target.value)}
-                    />
-                  </div>
+            {TARIFF_GROUPS.map((group) => (
+              <div key={group.title}>
+                <div className="av-divider">
+                  <span>{group.title}</span>
                 </div>
-              ))}
-            </div>
+                <div className="admin-grid">
+                  {group.fields.map((f) => (
+                    <div className="field-stack" key={f.key}>
+                      <label className="field-label">{f.label}</label>
+                      <div className="field-control-wrap">
+                        <i className="bi bi-currency-exchange field-icon" aria-hidden="true" />
+                        <input
+                          className="form-control"
+                          inputMode="decimal"
+                          value={values[f.key]}
+                          placeholder="0"
+                          onChange={(e) => setField(f.key, e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
             <div className="search-toolbar" style={{ marginTop: 16 }}>
               <div />
               <div className="search-toolbar-actions">
@@ -450,6 +479,7 @@ export default function YandexReportPage() {
         created_at: v.created_at,
         platform: v.platform,
         cpu_type: v.cpu_type,
+        cpu_vendor: v.cpu_vendor,
         cores: v.cores,
         ram_gb: v.ram_gb,
         ssd_gb: v.ssd_gb,

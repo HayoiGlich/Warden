@@ -32,6 +32,8 @@ PLATFORM_NAMES = {
     "standard-v3": "Intel Ice Lake",
     "standard-v3-t4": "Intel Ice Lake (T4)",
     "highfreq-v3": "Intel Ice Lake (Compute Optimized)",
+    "standard-v4": "AMD Zen 4",
+    "highfreq-v4": "AMD Zen 4 (Compute Optimized)",
     "gpu-standard-v1": "Intel Broadwell + GPU V100",
     "gpu-standard-v2": "Intel Cascade Lake + GPU V100",
     "gpu-standard-v3": "AMD EPYC + GPU A100",
@@ -39,11 +41,31 @@ PLATFORM_NAMES = {
 }
 
 # Платформы с высокой частотой ЦПУ — тариф «Compute Optimized».
-COMPUTE_OPTIMIZED_PLATFORMS = {"highfreq-v3"}
+COMPUTE_OPTIMIZED_PLATFORMS = {"highfreq-v3", "highfreq-v4"}
+
+# Явные принадлежности платформ к вендору (остальное решает эвристика по имени).
+_AMD_PLATFORMS = {"standard-v4", "highfreq-v4", "gpu-standard-v3"}
+_INTEL_PLATFORMS = {
+    "standard-v1", "standard-v2", "standard-v3", "standard-v3-t4", "highfreq-v3",
+    "gpu-standard-v1", "gpu-standard-v2", "gpu-standard-v3i",
+}
 
 
 def _cpu_type(platform_id: str) -> str:
     return "Compute Optimized" if platform_id in COMPUTE_OPTIMIZED_PLATFORMS else "Обычный"
+
+
+def _cpu_vendor(platform_id: str) -> str:
+    """Вендор ЦПУ платформы: 'intel' | 'amd'. По умолчанию Intel."""
+    pid = str(platform_id or "").lower()
+    if pid in _AMD_PLATFORMS:
+        return "amd"
+    if pid in _INTEL_PLATFORMS:
+        return "intel"
+    name = str(PLATFORM_NAMES.get(platform_id, platform_id) or "").lower()
+    if any(m in pid or m in name for m in ("amd", "epyc", "zen")):
+        return "amd"
+    return "intel"
 
 
 def _disk_kind(type_id: str) -> str:
@@ -121,27 +143,35 @@ def load_tariff() -> Dict[str, float]:
         except (TypeError, ValueError):
             return 0.0
 
+    def vendor(prefix: str) -> Dict[str, float]:
+        return {
+            "cpu_day": day(f"{prefix}_cpu_100"),   # ЦПУ 100% (обычный)
+            "cpu_day_hi": day(f"{prefix}_cpu_hi"),  # ЦПУ Compute Optimized
+            "ram_day": day(f"{prefix}_ram"),        # ОЗУ (обычное)
+            "ram_day_hi": day(f"{prefix}_ram_hi"),  # ОЗУ (Compute Optimized)
+        }
+
     return {
-        "cpu_day": day("cpu_100"),     # ЦПУ 100% (обычный), за сутки
-        "cpu_day_half": day("cpu_50"),  # ЦПУ 50%
-        "cpu_day_hi": day("cpu_hi"),   # ЦПУ высокопроизв. (Compute Optimized)
-        "ram_day": day("ram"),         # ОЗУ (обычное)
-        "ram_day_hi": day("ram_hi"),   # ОЗУ (высокопроизв.)
-        "ssd_day": day("ssd"),         # SSD
-        "hdd_day": day("hdd"),         # HDD
+        "intel": vendor("intel"),
+        "amd": vendor("amd"),
+        "ssd_day": day("ssd"),  # диски общие для вендоров
+        "hdd_day": day("hdd"),
     }
 
 
-def _cost_day(tariff: Dict[str, float], cpu_type: str, cores, ram_gb, ssd_gb, hdd_gb) -> float:
-    """Стоимость ВМ в сутки: ЦПУ+ОЗУ по типу платформы, диски раздельно."""
+def _cost_day(
+    tariff: Dict[str, Any], vendor: str, cpu_type: str, cores, ram_gb, ssd_gb, hdd_gb
+) -> float:
+    """Стоимость ВМ в сутки: ЦПУ+ОЗУ по вендору и типу платформы, диски раздельно."""
+    vt = tariff.get(vendor) or tariff.get("intel") or {}
     is_hi = cpu_type == "Compute Optimized"
-    cpu_price = tariff["cpu_day_hi"] if is_hi else tariff["cpu_day"]
-    ram_price = tariff["ram_day_hi"] if is_hi else tariff["ram_day"]
+    cpu_price = vt.get("cpu_day_hi", 0) if is_hi else vt.get("cpu_day", 0)
+    ram_price = vt.get("ram_day_hi", 0) if is_hi else vt.get("ram_day", 0)
     return _round2(
         (cores or 0) * cpu_price
         + (ram_gb or 0) * ram_price
-        + (ssd_gb or 0) * tariff["ssd_day"]
-        + (hdd_gb or 0) * tariff["hdd_day"]
+        + (ssd_gb or 0) * tariff.get("ssd_day", 0)
+        + (hdd_gb or 0) * tariff.get("hdd_day", 0)
     )
 
 
@@ -153,14 +183,22 @@ def _cost_day(tariff: Dict[str, float], cpu_type: str, cores, ram_gb, ssd_gb, hd
 # Intel Ice Lake — та, на которой работают ВМ фолдера. Цены в SKU заданы за час
 # (core*hour / gbyte*hour), что совпадает с единицей полей тарифа.
 YC_PRICE_SKUS = {
-    "cpu_100": "dn2k3vqlk9snp1jv351u",  # Regular Intel Ice Lake, 100% vCPU
-    "cpu_50": "dn2f0q0d6gtpcom4b1p6",   # Regular Intel Ice Lake, 50% vCPU
-    "cpu_hi": "dn2lag3718gm9oq8dus2",   # Intel Ice Lake (Compute Optimized), 100% vCPU
-    "ram": "dn2ilq72mjc3bej6j74p",      # Regular Intel Ice Lake, RAM
-    "ram_hi": "dn23hq90a5khr3o6fivm",   # Intel Ice Lake (Compute Optimized), RAM
-    "ssd": "dn27ajm6m8mnfcshbi61",      # Fast network drive (SSD) = network-ssd
-    "ssd_io": "dn2bl3v71k1mej7andmc",   # Ultra high-speed (SSD, 3 replicas)
-    "hdd": "dn2al287u6jr3a710u8g",      # Standard disk drive (HDD) = network-hdd
+    # Intel Ice Lake
+    "intel_cpu_100": "dn2k3vqlk9snp1jv351u",  # Regular Intel Ice Lake, 100% vCPU
+    "intel_cpu_50": "dn2f0q0d6gtpcom4b1p6",   # Regular Intel Ice Lake, 50% vCPU
+    "intel_cpu_hi": "dn2lag3718gm9oq8dus2",   # Intel Ice Lake (Compute Optimized), 100%
+    "intel_ram": "dn2ilq72mjc3bej6j74p",      # Regular Intel Ice Lake, RAM
+    "intel_ram_hi": "dn23hq90a5khr3o6fivm",   # Intel Ice Lake (Compute Optimized), RAM
+    # AMD Zen 4
+    "amd_cpu_100": "dn28kn5h601tc7lk5fbu",    # Regular AMD Zen 4, 100% vCPU
+    "amd_cpu_50": "dn292qoem8pkl2rig4i7",     # Regular AMD Zen 4, 50% vCPU
+    "amd_cpu_hi": "dn2bnom85ie58bpvmtmn",     # AMD Zen 4 (Compute Optimized), 100% vCPU
+    "amd_ram": "dn29sa4d441spg8aokdn",        # Regular AMD Zen 4, RAM
+    "amd_ram_hi": "dn2dq9mqiklrm87pc1h2",     # AMD Zen 4 (Compute Optimized), RAM
+    # Диски (общие)
+    "ssd": "dn27ajm6m8mnfcshbi61",            # Fast network drive (SSD) = network-ssd
+    "ssd_io": "dn2bl3v71k1mej7andmc",         # Ultra high-speed (SSD, 3 replicas)
+    "hdd": "dn2al287u6jr3a710u8g",            # Standard disk drive (HDD) = network-hdd
 }
 
 _IAM_TOKEN_URL = "https://iam.api.cloud.yandex.net/iam/v1/tokens"
@@ -399,7 +437,10 @@ def list_vms() -> List[Dict[str, Any]]:
             snap_gb = _round2(total_snap_bytes / GIB)
 
             cpu_type = _cpu_type(inst.platform_id)
-            cost_day = _cost_day(tariff, cpu_type, cores, ram_gb, ssd_gb, hdd_gb)
+            cpu_vendor = _cpu_vendor(inst.platform_id)
+            cost_day = _cost_day(
+                tariff, cpu_vendor, cpu_type, cores, ram_gb, ssd_gb, hdd_gb
+            )
             cost_year = _round2(cost_day * 365)
 
             rows.append(
@@ -412,6 +453,7 @@ def list_vms() -> List[Dict[str, Any]]:
                     "platform": PLATFORM_NAMES.get(inst.platform_id, inst.platform_id or ""),
                     "platform_id": inst.platform_id,
                     "cpu_type": cpu_type,
+                    "cpu_vendor": cpu_vendor,
                     "os": resolve_os(boot_image_id),
                     "cores": cores,
                     "core_fraction": core_fraction,
@@ -471,6 +513,7 @@ def recompute_cached_costs() -> None:
     for vm in _vms_cache["data"]:
         vm["cost_day"] = _cost_day(
             tariff,
+            vm.get("cpu_vendor", "intel"),
             vm.get("cpu_type", ""),
             vm.get("cores", 0),
             vm.get("ram_gb", 0),
@@ -511,15 +554,15 @@ def _detect_os_from_family(family: str) -> str:
 def build_report_xlsx(rows: List[Dict[str, Any]]) -> bytes:
     """Заполняет шаблон выбранными ВМ и возвращает содержимое xlsx (байты).
 
-    Пересобираются листы «Список ВМ» и «Снимки» (сырые данные) и «Общий»
-    (формулы расчёта цены). Лист «Тариф» из шаблона сохраняется как есть.
-
-    В «Список ВМ» теперь есть платформа, тип ЦПУ (Обычный / Compute Optimized)
-    и раздельные объёмы SSD и HDD. Цена в «Общий» считается по типу платформы
-    (обычный/высокопроизводительный тариф ЦПУ и ОЗУ) и раздельно по SSD/HDD.
+    Листы «Список ВМ» и «Снимки» — исходные данные, «Общий» — расчёт стоимости.
+    Цена считается по вендору (Intel/AMD) и типу платформы (обычный / Compute
+    Optimized), диски (SSD/HDD) раздельно. Лист «Тариф» переписывается в
+    справочную таблицу цен Intel/AMD, по которой шёл расчёт.
     """
     from openpyxl import load_workbook
     from openpyxl.styles import Font, PatternFill
+
+    from backend.modules.yc_tariff import yc_tariff
 
     path = _template_path()
     if not path.is_file():
@@ -529,15 +572,10 @@ def build_report_xlsx(rows: List[Dict[str, Any]]) -> bytes:
     ws_list = wb["Список ВМ"]
     ws_snap = wb["Снимки"]
     ws_total = wb["Общий"]
-
-    # Подставляем актуальные цены (вкладка «Тарифы») в лист «Тариф» — строка 2
-    # (за час), строка 3 (за сутки) в шаблоне пересчитается формулой =…*24.
-    from backend.modules.yc_tariff import FIELD_CELLS, yc_tariff
-
     ws_tariff = wb["Тариф"]
-    tariff_values = yc_tariff.values()
-    for key, cell in FIELD_CELLS.items():
-        ws_tariff[cell] = tariff_values.get(key, 0.0)
+
+    tariff = load_tariff()          # за сутки, по вендорам — для расчёта
+    tv = yc_tariff.values()         # за час — для справочного листа «Тариф»
 
     header_font = Font(bold=True)
     header_fill = PatternFill("solid", fgColor="E2EFDA")
@@ -570,6 +608,7 @@ def build_report_xlsx(rows: List[Dict[str, Any]]) -> bytes:
         created_at = str(row.get("created_at") or "")
         platform = str(row.get("platform") or "")
         cpu_type = str(row.get("cpu_type") or "Обычный")
+        vendor = str(row.get("cpu_vendor") or "intel")
         cores = row.get("cores") or 0
         ram_gb = row.get("ram_gb") or 0
         ssd_gb = row.get("ssd_gb") or 0
@@ -588,27 +627,47 @@ def build_report_xlsx(rows: List[Dict[str, Any]]) -> bytes:
         ws_snap.cell(idx, 1, name)
         ws_snap.cell(idx, 2, snap_gb)
 
-        # Тариф ЦПУ/ОЗУ зависит от типа платформы: обычный (B3/E3) либо
-        # высокопроизводительный / Compute Optimized (D3/F3).
-        is_hi = cpu_type == "Compute Optimized"
-        cpu_cell = "$D$3" if is_hi else "$B$3"
-        ram_cell = "$F$3" if is_hi else "$E$3"
+        day = _cost_day(tariff, vendor, cpu_type, cores, ram_gb, ssd_gb, hdd_gb)
+        year = _round2(day * 365)
 
-        # A..H — зеркало «Список ВМ», I — снимки, J/K/L — расчёт.
+        # A..H — зеркало «Список ВМ», I — снимки, J/K — рассчитанная стоимость
+        # (числами: тариф зависит от вендора построчно, поэтому расчёт делаем
+        # здесь, а не единой формулой на весь лист).
         for col, letter in enumerate("ABCDEFGH", start=1):
             ws_total.cell(idx, col, f"='Список ВМ'!{letter}{idx}")
         ws_total.cell(idx, 9, f"='Снимки'!B{idx}")
-        ws_total.cell(
-            idx,
-            10,
-            f"=E{idx}*Тариф!{cpu_cell}+F{idx}*Тариф!{ram_cell}"
-            f"+G{idx}*Тариф!$G$3+H{idx}*Тариф!$I$3",
-        )
-        ws_total.cell(idx, 11, f"=J{idx}*365")
+        ws_total.cell(idx, 10, day)
+        ws_total.cell(idx, 11, year)
 
     if rows:
         last = len(rows) + 1
         ws_total.cell(2, 12, f"=SUM(K2:K{last})")
+
+    # Лист «Тариф» — справочная таблица цен за час, по которой шёл расчёт.
+    if ws_tariff.max_row >= 1:
+        ws_tariff.delete_rows(1, ws_tariff.max_row)
+    tariff_table = [
+        ("Тариф (цена за час, ₽)", "Intel", "AMD"),
+        ("ЦПУ 100%", tv.get("intel_cpu_100"), tv.get("amd_cpu_100")),
+        ("ЦПУ 50%", tv.get("intel_cpu_50"), tv.get("amd_cpu_50")),
+        ("ЦПУ Compute Optimized", tv.get("intel_cpu_hi"), tv.get("amd_cpu_hi")),
+        ("ОЗУ (за ГБ)", tv.get("intel_ram"), tv.get("amd_ram")),
+        ("ОЗУ Compute Optimized (за ГБ)", tv.get("intel_ram_hi"), tv.get("amd_ram_hi")),
+        ("SSD (за ГБ)", tv.get("ssd"), tv.get("ssd")),
+        ("SSD IO (за ГБ)", tv.get("ssd_io"), tv.get("ssd_io")),
+        ("HDD (за ГБ)", tv.get("hdd"), tv.get("hdd")),
+    ]
+    for r, (a, b, c) in enumerate(tariff_table, start=1):
+        ca = ws_tariff.cell(r, 1, a)
+        ws_tariff.cell(r, 2, b)
+        ws_tariff.cell(r, 3, c)
+        if r == 1:
+            for col in (1, 2, 3):
+                ws_tariff.cell(r, col).font = header_font
+                ws_tariff.cell(r, col).fill = header_fill
+    ws_tariff.column_dimensions["A"].width = 32
+    ws_tariff.column_dimensions["B"].width = 12
+    ws_tariff.column_dimensions["C"].width = 12
 
     # Ширина колонок для читабельности + закреплённая шапка.
     for ws, headers in (

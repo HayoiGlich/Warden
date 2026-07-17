@@ -280,6 +280,7 @@ class YcReportRow(BaseModel):
     created_at: str = ""
     platform: str = ""
     cpu_type: str = ""
+    cpu_vendor: str = "intel"
     cores: float = 0
     ram_gb: float = 0
     ssd_gb: float = 0
@@ -295,15 +296,21 @@ class YcReportRequest(BaseModel):
 
 
 class YcTariffIn(BaseModel):
-    """Тарифы (цена за час, ₽). Все поля опциональны — пустое считается 0."""
+    """Тарифы (цена за час, ₽). ЦПУ/ОЗУ раздельно для Intel и AMD, диски общие.
+    Все поля опциональны — пустое считается 0."""
 
     model_config = ConfigDict(extra="ignore")
 
-    cpu_100: float = 0
-    cpu_50: float = 0
-    cpu_hi: float = 0
-    ram: float = 0
-    ram_hi: float = 0
+    intel_cpu_100: float = 0
+    intel_cpu_50: float = 0
+    intel_cpu_hi: float = 0
+    intel_ram: float = 0
+    intel_ram_hi: float = 0
+    amd_cpu_100: float = 0
+    amd_cpu_50: float = 0
+    amd_cpu_hi: float = 0
+    amd_ram: float = 0
+    amd_ram_hi: float = 0
     ssd: float = 0
     ssd_io: float = 0
     hdd: float = 0

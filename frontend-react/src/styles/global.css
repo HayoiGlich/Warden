@@ -1573,3 +1573,39 @@ p { margin: 0; }
   .container { padding-left: 16px; padding-right: 16px; }
   .surface-pad { padding: 18px 16px; }
 }
+
+/* ==================== Адаптив: планшеты и смартфоны ==================== */
+
+/* Формы удобнее в одну колонку на узких экранах. */
+@media (max-width: 720px) {
+  .admin-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .app-main { padding: 18px 0 44px; }
+  .page-hero { padding: 20px 16px; }
+  .surface-head { gap: 12px; }
+
+  /* Экшен-кнопки на всю ширину — крупная зона нажатия пальцем. */
+  .page-hero-actions,
+  .search-toolbar-actions { width: 100%; }
+  .page-hero-actions > .btn,
+  .search-toolbar-actions > .btn { flex: 1 1 auto; justify-content: center; }
+  .surface-head > .btn { flex: 1 1 100%; justify-content: center; }
+
+  /* Поля с кнопками (генерация пароля/логина, выбор OU) переносятся. */
+  .field-with-action { flex-wrap: wrap; }
+
+  /* Модалки выбора занимают почти весь экран. */
+  .modal-shell { padding: 10px; }
+  .modal-dialog-react { width: 100%; max-height: calc(100vh - 20px); }
+}
+
+@media (max-width: 480px) {
+  :root { --side-width: 56px; }
+  .container { padding-left: 12px; padding-right: 12px; }
+  .surface-pad { padding: 16px 12px; }
+  .page-hero-icon { display: none; }
+  .admin-modes { gap: 6px; }
+  .admin-mode-btn { flex: 1 1 auto; justify-content: center; }
+}
