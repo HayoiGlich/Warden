@@ -146,6 +146,97 @@ def _cost_day(tariff: Dict[str, float], cpu_type: str, cores, ram_gb, ssd_gb, hd
 
 
 # --------------------------------------------------------------------------- #
+# Актуальные цены из Yandex Cloud Billing API (кнопка «Вставить цены»)
+# --------------------------------------------------------------------------- #
+
+# Поле тарифа -> SKU Compute Cloud (сервис dn22pas77ftg9h3f2djj), платформа
+# Intel Ice Lake — та, на которой работают ВМ фолдера. Цены в SKU заданы за час
+# (core*hour / gbyte*hour), что совпадает с единицей полей тарифа.
+YC_PRICE_SKUS = {
+    "cpu_100": "dn2k3vqlk9snp1jv351u",  # Regular Intel Ice Lake, 100% vCPU
+    "cpu_50": "dn2f0q0d6gtpcom4b1p6",   # Regular Intel Ice Lake, 50% vCPU
+    "cpu_hi": "dn2lag3718gm9oq8dus2",   # Intel Ice Lake (Compute Optimized), 100% vCPU
+    "ram": "dn2ilq72mjc3bej6j74p",      # Regular Intel Ice Lake, RAM
+    "ram_hi": "dn23hq90a5khr3o6fivm",   # Intel Ice Lake (Compute Optimized), RAM
+    "ssd": "dn27ajm6m8mnfcshbi61",      # Fast network drive (SSD) = network-ssd
+    "ssd_io": "dn2bl3v71k1mej7andmc",   # Ultra high-speed (SSD, 3 replicas)
+    "hdd": "dn2al287u6jr3a710u8g",      # Standard disk drive (HDD) = network-hdd
+}
+
+_IAM_TOKEN_URL = "https://iam.api.cloud.yandex.net/iam/v1/tokens"
+_BILLING_SKU_URL = "https://billing.api.cloud.yandex.net/billing/v1/skus/{sku}"
+
+
+def _iam_token() -> str:
+    """IAM-токен по ключу сервисного аккаунта (JWT -> IAM API)."""
+    import time
+
+    import jwt
+    import requests
+
+    key = _load_key_data()
+    now = int(time.time())
+    encoded = jwt.encode(
+        {
+            "aud": _IAM_TOKEN_URL,
+            "iss": key["service_account_id"],
+            "iat": now,
+            "exp": now + 3600,
+        },
+        key["private_key"],
+        algorithm="PS256",
+        headers={"kid": key["id"]},
+    )
+    resp = requests.post(_IAM_TOKEN_URL, json={"jwt": encoded}, timeout=20)
+    resp.raise_for_status()
+    return resp.json()["iamToken"]
+
+
+def _latest_street_price(sku: dict) -> float:
+    versions = [
+        v for v in sku.get("pricingVersions", []) if v.get("type") == "STREET_PRICE"
+    ]
+    if not versions:
+        return 0.0
+    rates = versions[-1].get("pricingExpressions", [{}])[0].get("rates", [{}])
+    try:
+        return round(float(rates[0].get("unitPrice") or 0), 6)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def fetch_tariff_prices() -> Dict[str, Any]:
+    """Актуальные цены за час (₽) из Billing API по фиксированным SKU.
+
+    Возвращает {"prices": {поле: цена}, "as_of": ISO-дата действия}.
+    """
+    import requests
+
+    token = _iam_token()
+    headers = {"Authorization": f"Bearer {token}"}
+    prices: Dict[str, float] = {}
+    as_of = ""
+    for field, sku_id in YC_PRICE_SKUS.items():
+        resp = requests.get(
+            _BILLING_SKU_URL.format(sku=sku_id),
+            params={"currency": "RUB"},
+            headers=headers,
+            timeout=25,
+        )
+        resp.raise_for_status()
+        sku = resp.json()
+        prices[field] = _latest_street_price(sku)
+        versions = [
+            v for v in sku.get("pricingVersions", []) if v.get("type") == "STREET_PRICE"
+        ]
+        if versions and versions[-1].get("effectiveTime"):
+            eff = versions[-1]["effectiveTime"]
+            if eff > as_of:
+                as_of = eff
+    return {"prices": prices, "as_of": as_of}
+
+
+# --------------------------------------------------------------------------- #
 # Листинг ВМ
 # --------------------------------------------------------------------------- #
 

@@ -67,6 +67,26 @@ async def api_yc_tariff_put(request: Request, payload: YcTariffIn):
     return {"success": True, "tariff": saved}
 
 
+@yc_router.get("/tariff/fetch")
+async def api_yc_tariff_fetch(request: Request):
+    """Актуальные цены за час из Yandex Cloud Billing API (для «Вставить цены»)."""
+    require_perm(request, "settings")
+    if not yc_report.configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Нет ключа сервисного аккаунта Yandex Cloud.",
+        )
+    try:
+        data = await run_in_threadpool(yc_report.fetch_tariff_prices)
+    except Exception as exc:  # pragma: no cover - зависит от облака/прав SA
+        logger.exception("YC fetch prices failed")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Не удалось получить цены из Yandex Cloud: {exc}",
+        )
+    return {"success": True, **data}
+
+
 @yc_router.post("/report/xlsx")
 async def api_yc_report_xlsx(request: Request, payload: YcReportRequest):
     require_perm(request, "settings")

@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import PageHero from "../components/PageHero";
 import ToastStack from "../components/ToastStack";
-import { downloadYcReport, getYcTariff, getYcVms, saveYcTariff } from "../api";
+import {
+  downloadYcReport,
+  fetchYcPrices,
+  getYcTariff,
+  getYcVms,
+  saveYcTariff,
+} from "../api";
 
 /* ------------------------------------------------------------------ utils */
 
@@ -33,6 +39,49 @@ function fmtCachedAt(epochSeconds) {
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+// «ДД.ММ.ГГГГ» -> число ГГГГММДД для корректной сортировки по дате
+// (как строка «02.11.2024» сортировалась бы раньше «14.03.2019»).
+function dateValue(value) {
+  const m = String(value || "").match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  return m ? Number(`${m[3]}${m[2]}${m[1]}`) : 0;
+}
+
+// Числа сравниваем как числа, даты — по dateValue, остальное — по-русски.
+function compareBy(key, dir) {
+  const mul = dir === "asc" ? 1 : -1;
+  return (a, b) => {
+    let x = a[key];
+    let y = b[key];
+    if (key === "created_at") {
+      return (dateValue(x) - dateValue(y)) * mul;
+    }
+    if (typeof x === "number" || typeof y === "number") {
+      return ((Number(x) || 0) - (Number(y) || 0)) * mul;
+    }
+    return String(x || "").localeCompare(String(y || ""), "ru") * mul;
+  };
+}
+
+// Заголовок с сортировкой: клик — переключить направление.
+function Th({ label, sortKey, sort, onSort, num = false }) {
+  const active = sort.key === sortKey;
+  const icon = active
+    ? sort.dir === "asc"
+      ? "bi-caret-up-fill"
+      : "bi-caret-down-fill"
+    : "bi-arrow-down-up";
+  return (
+    <th
+      className={`yc-th-sort${num ? " yc-num" : ""}${active ? " is-active" : ""}`}
+      onClick={() => onSort(sortKey)}
+      title={`Сортировать по «${label}»`}
+    >
+      {label}
+      <i className={`bi ${icon} yc-sort-ico`} aria-hidden="true" />
+    </th>
+  );
 }
 
 const STATUS_TONE = {
@@ -84,6 +133,7 @@ function TariffEditor({ pushToast, onSaved }) {
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [fetching, setFetching] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,6 +161,34 @@ function TariffEditor({ pushToast, onSaved }) {
   function setField(key, val) {
     const clean = val.replace(",", ".").replace(/[^0-9.]/g, "");
     setValues((c) => ({ ...c, [key]: clean }));
+  }
+
+  // Тянет актуальные цены из Yandex Cloud и подставляет их в поля (без
+  // сохранения — пользователь проверяет и жмёт «Сохранить тарифы»).
+  async function onFetch() {
+    setFetching(true);
+    try {
+      const data = await fetchYcPrices();
+      const p = data.prices || {};
+      setValues((cur) =>
+        Object.fromEntries(
+          TARIFF_FIELDS.map((f) => [
+            f.key,
+            p[f.key] === undefined ? cur[f.key] : String(p[f.key]),
+          ])
+        )
+      );
+      const when = String(data.as_of || "").slice(0, 10);
+      pushToast(
+        `Цены вставлены${when ? ` (тариф от ${when})` : ""}. Проверьте и сохраните.`,
+        "success",
+        "Тарифы"
+      );
+    } catch (err) {
+      pushToast(err.message || String(err), "danger", "Вставка цен");
+    } finally {
+      setFetching(false);
+    }
   }
 
   async function onSave() {
@@ -176,7 +254,17 @@ function TariffEditor({ pushToast, onSaved }) {
             <div className="search-toolbar" style={{ marginTop: 16 }}>
               <div />
               <div className="search-toolbar-actions">
-                <button type="button" className="btn btn-primary px-4" onClick={onSave} disabled={saving}>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={onFetch}
+                  disabled={fetching || saving}
+                  title="Актуальные цены из Yandex Cloud Billing"
+                >
+                  <i className={`bi ${fetching ? "fam-spin bi-arrow-repeat" : "bi-cloud-download"} me-2`} />
+                  {fetching ? "Получаю…" : "Вставить цены"}
+                </button>
+                <button type="button" className="btn btn-primary px-4" onClick={onSave} disabled={saving || fetching}>
                   <i className={`bi ${saving ? "fam-spin bi-arrow-repeat" : "bi-save"} me-2`} />
                   {saving ? "Сохраняю…" : "Сохранить тарифы"}
                 </button>
@@ -197,6 +285,7 @@ export default function YandexReportPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState({ key: "name", dir: "asc" });
   const [downloading, setDownloading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [cachedAt, setCachedAt] = useState(0);
@@ -287,10 +376,27 @@ export default function YandexReportPage() {
     );
   }, [vms, query]);
 
-  const selectedVms = useMemo(
-    () => vms.filter((v) => selected.has(v.id)),
-    [vms, selected]
+  // Сортировка применяется и к таблице выбора, и к отчёту/выгрузке — порядок
+  // в скачанном файле совпадает с тем, что видно на экране.
+  const sorted = useMemo(
+    () => [...filtered].sort(compareBy(sort.key, sort.dir)),
+    [filtered, sort]
   );
+
+  // Выбранные берём из всех ВМ (а не из отфильтрованных): поиск не должен
+  // выкидывать отмеченные машины из отчёта.
+  const selectedVms = useMemo(
+    () => vms.filter((v) => selected.has(v.id)).sort(compareBy(sort.key, sort.dir)),
+    [vms, selected, sort]
+  );
+
+  function onSort(key) {
+    setSort((cur) =>
+      cur.key === key
+        ? { key, dir: cur.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: "asc" }
+    );
+  }
 
   const totals = useMemo(() => {
     return selectedVms.reduce(
@@ -442,30 +548,30 @@ export default function YandexReportPage() {
                         title="Выбрать всё / снять"
                       />
                     </th>
-                    <th>Имя ВМ</th>
-                    <th>Создана</th>
-                    <th>Статус</th>
-                    <th>Платформа</th>
-                    <th>Тип ЦПУ</th>
-                    <th>ОС</th>
-                    <th className="yc-num">vCPU</th>
-                    <th className="yc-num">ОЗУ, Гб</th>
-                    <th className="yc-num">SSD, Гб</th>
-                    <th className="yc-num">HDD, Гб</th>
-                    <th className="yc-num">Снимки, Гб</th>
-                    <th className="yc-num">Цена/сутки, ₽</th>
-                    <th className="yc-num">Цена/год, ₽</th>
+                    <Th label="Имя ВМ" sortKey="name" sort={sort} onSort={onSort} />
+                    <Th label="Создана" sortKey="created_at" sort={sort} onSort={onSort} />
+                    <Th label="Статус" sortKey="status" sort={sort} onSort={onSort} />
+                    <Th label="Платформа" sortKey="platform" sort={sort} onSort={onSort} />
+                    <Th label="Тип ЦПУ" sortKey="cpu_type" sort={sort} onSort={onSort} />
+                    <Th label="ОС" sortKey="os" sort={sort} onSort={onSort} />
+                    <Th label="vCPU" sortKey="cores" sort={sort} onSort={onSort} num />
+                    <Th label="ОЗУ, Гб" sortKey="ram_gb" sort={sort} onSort={onSort} num />
+                    <Th label="SSD, Гб" sortKey="ssd_gb" sort={sort} onSort={onSort} num />
+                    <Th label="HDD, Гб" sortKey="hdd_gb" sort={sort} onSort={onSort} num />
+                    <Th label="Снимки, Гб" sortKey="snapshots_gb" sort={sort} onSort={onSort} num />
+                    <Th label="Цена/сутки, ₽" sortKey="cost_day" sort={sort} onSort={onSort} num />
+                    <Th label="Цена/год, ₽" sortKey="cost_year" sort={sort} onSort={onSort} num />
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length === 0 ? (
+                  {sorted.length === 0 ? (
                     <tr>
-                      <td colSpan={13} className="admin-hint" style={{ textAlign: "center" }}>
+                      <td colSpan={14} className="admin-hint" style={{ textAlign: "center" }}>
                         {vms.length ? "Ничего не найдено." : "В фолдере нет виртуальных машин."}
                       </td>
                     </tr>
                   ) : (
-                    filtered.map((v) => {
+                    sorted.map((v) => {
                       const checked = selected.has(v.id);
                       const tone = STATUS_TONE[v.status] || "muted";
                       return (

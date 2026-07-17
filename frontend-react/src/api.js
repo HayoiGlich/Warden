@@ -364,6 +364,12 @@ export async function saveYcTariff(tariff) {
   return readJson(response);
 }
 
+// Актуальные цены за час из Yandex Cloud Billing API (кнопка «Вставить цены»).
+export async function fetchYcPrices() {
+  const response = await fetch("/api/yc/tariff/fetch", { cache: "no-store" });
+  return readJson(response);
+}
+
 // Скачивает xlsx-отчёт по выбранным машинам (rows — массив выбранных ВМ).
 export async function downloadYcReport(rows) {
   const response = await fetch("/api/yc/report/xlsx", {
